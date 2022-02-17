@@ -6,12 +6,13 @@ interface FormStoreOptions<Store> {
 }
 
 declare module 'pinia' {
-  export interface PiniaCustomProperties {
-    submit: () => void;
-  }
+  // export interface PiniaCustomProperties {
+  //   // todo
+  // }
 
   export interface PiniaCustomStateProperties<S> {
     isSaving: boolean;
+    isDirty: boolean;
     error: string | undefined;
   }
 
@@ -22,33 +23,38 @@ declare module 'pinia' {
 
 export default function formStorePlugin(context: PiniaPluginContext): void {
   /* eslint-disable no-param-reassign */
-
   if (!context.options.formStore) return; // do nothing.
+
   const options = context.options.formStore === true ? {} : context.options.formStore;
+  const { store } = context;
 
   // assign some state
-  context.store.isSaving = false;
+  store.isSaving = false;
+  store.isDirty = false;
+  store.error = undefined;
 
-  // assign some methods
-  context.store.submit = async () => {
-    if (!options.onSubmit) {
-      alert('Error: Not submit handler specified in form options');
-      return;
+  // subscriptions
+  store.$subscribe((mutation, newState) => {
+    // react to store changes
+    store.isDirty = true;
+  });
+
+  store.$onAction(({
+    name, store: s, after, onError,
+  }) => {
+    if (name === 'submit') {
+      s.isSaving = true;
+      after(() => {
+        // success!
+        s.isSaving = false;
+        s.isDirty = false;
+      });
+      onError((error) => {
+        s.error = (error as Error).message;
+        s.isSaving = false;
+      });
     }
-
-    context.store.isSaving = true;
-
-    // todo: validattion?
-
-    try {
-      await options.onSubmit(context.store);
-    } catch (error) {
-      context.store.error = (error as Error).message;
-      throw (error);
-    } finally {
-      context.store.isSaving = false;
-    }
-  };
+  });
 
   /* eslint-enable no-param-reassign */
 }
